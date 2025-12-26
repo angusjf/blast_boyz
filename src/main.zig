@@ -106,7 +106,7 @@ pub fn main() !void {
     const width = 128;
     const height = 128;
 
-    rl.initWindow(width * scale, width * scale, "hello world :)");
+    rl.initWindow(width * scale, width * scale, "Blast Boyz");
     defer rl.closeWindow();
 
     rl.setTargetFPS(60);
