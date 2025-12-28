@@ -1,5 +1,5 @@
-const rl = @import("raylib");
 const std = @import("std");
+const P8 = @import("p8.zig").P8;
 
 pub const Buttons = struct {
     left_hit: bool = false,
@@ -44,7 +44,7 @@ const jump = 4.5;
 const throw = 4;
 const walk = 20;
 const fric = 0.1;
-const gem_fric = 0.95;
+const bomb_fric = 0.95;
 const bomb_life = 240;
 
 const State = struct {
@@ -57,8 +57,6 @@ const State = struct {
     particles: std.ArrayList(Particle),
     shake: f32,
 };
-
-var sheet: ?rl.Texture2D = null;
 
 const Player = struct {
     vx: f32,
@@ -91,42 +89,14 @@ var blocks_buf: [64]Vec2 = undefined;
 var bombs_buf: [64]Bomb = undefined;
 var particles_buf: [1024]Particle = undefined;
 
-var rand: std.Random = undefined;
-var prng: std.Random.Xoshiro256 = undefined;
-
 fn lerp(a: f32, b: f32, t: f32) f32 {
     return a * (1 - t) + b * t;
 }
 
-var palette: [16]rl.Color = undefined;
+var p8: P8 = undefined;
 
 pub fn init(active: u1) !void {
-    prng = std.Random.Xoshiro256.init(blk: {
-        var seed: u64 = undefined;
-        std.posix.getrandom(std.mem.asBytes(&seed)) catch @panic("random setup failed");
-        break :blk seed;
-    });
-
-    rand = prng.random();
-
-    palette = .{
-        rl.Color.fromInt(0x000000), // black
-        rl.Color.fromInt(0x1D2B53), // dark-blue
-        rl.Color.fromInt(0x7E2553), // dark-purple
-        rl.Color.fromInt(0x008751), // dark-green
-        rl.Color.fromInt(0xAB5236), // brown
-        rl.Color.fromInt(0x5F574F), // dark-grey
-        rl.Color.fromInt(0xC2C3C7), // light-grey
-        rl.Color.fromInt(0xFFF1E8), // white
-        rl.Color.fromInt(0xFF004D), // red
-        rl.Color.fromInt(0xFFA300), // orange
-        rl.Color.fromInt(0xFFEC27), // yellow
-        rl.Color.fromInt(0x00E436), // green
-        rl.Color.fromInt(0x29ADFF), // blue
-        rl.Color.fromInt(0x83769C), // lavender
-        rl.Color.fromInt(0xFF77A8), // pink
-        rl.Color.fromInt(0xFFCCAA), // light-peach
-    };
+    p8.init();
 
     state = .{
         .players = [2]Player{
@@ -166,8 +136,6 @@ pub fn init(active: u1) !void {
                     .x = @floatFromInt(x * 8),
                     .y = @floatFromInt(y * 8),
                 });
-            } else if (m >= 7 and m <= 11) {
-                // add(gems, { m=m, x=x*8, y=y*8, vx=0, vy=0 })
             }
         }
     }
@@ -214,12 +182,12 @@ fn control(p: *Player, buttons: Buttons) void {
 
     if (buttons.up_hit and p.vy == 0) {
         p.vy = -jump;
-        sfx(0);
+        p8.sfx(0);
     }
 
     if (buttons.x_hit) {
         if (p.carry) {
-            sfx(6);
+            p8.sfx(6);
 
             var dx: f32 = if (p.flip) -throw else throw;
 
@@ -232,23 +200,11 @@ fn control(p: *Player, buttons: Buttons) void {
             p.carry = false;
         } else {
             if (bomb_near(p.x, p.y)) |_| {
-                sfx(2);
+                p8.sfx(2);
                 p.carry = true;
             }
         }
     }
-}
-
-fn rnd(max: f32) f32 {
-    return rand.float(f32) * max;
-}
-
-fn rndInt(max: u16) u16 {
-    return rand.intRangeAtMost(u16, 0, max);
-}
-
-fn rndChoose(options: []const u16) u16 {
-    return options[rand.int(usize) % options.len];
 }
 
 pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
@@ -269,7 +225,7 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
 
     if (state.ticks % 100 == 99 and state.bombs.items.len == 0)
         state.bombs.appendAssumeCapacity(.{
-            .x = 10 + rnd(100),
+            .x = 10 + p8.rnd(100),
             .y = 0,
             .vx = 0,
             .vy = 0,
@@ -280,13 +236,13 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
         if (state.ticks % 10 == 0) {
             const particle = Particle{
                 .type = 0,
-                .t = rndInt(150),
-                .x = bomb.x + rnd(5),
-                .y = bomb.y + rnd(5) - 2,
-                .vx = (rnd(1) - 1) / 2,
-                .vy = (rnd(1) - 1) / 2,
-                .r = rnd(2),
-                .c = rndChoose(&[_]u16{ 5, 9, 10, 13 }),
+                .t = p8.rndInt(150),
+                .x = bomb.x + p8.rnd(5),
+                .y = bomb.y + p8.rnd(5) - 2,
+                .vx = (p8.rnd(1) - 1) / 2,
+                .vy = (p8.rnd(1) - 1) / 2,
+                .r = p8.rnd(2),
+                .c = p8.rndChoose(&[_]u16{ 5, 9, 10, 13 }),
             };
             state.particles.appendBounded(particle) catch {};
         }
@@ -320,7 +276,7 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
             player.y += d2b;
             player.vy = 0;
             if (!player.grounded) {
-                sfx(4);
+                p8.sfx(4);
                 player.grounded = true;
             }
         } else {
@@ -350,7 +306,7 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
             }
         } else {
             bomb.vy += grav;
-            bomb.vx *= gem_fric;
+            bomb.vx *= bomb_fric;
 
             if (bomb.x + bomb.vx < 0) {
                 bomb.x = 0 - bomb.vx;
@@ -368,14 +324,15 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
 
             if (bomb.vy > d2b) {
                 if (bomb.vy > 0.5) {
-                    sfx(7);
+                    p8.sfx(7);
                 }
                 bomb.y += d2b;
                 bomb.vy = -bomb.vy / 4;
-                bomb.vx = bomb.vy / 2 * (rnd(1) - 0.5);
+                bomb.vx = bomb.vy / 2 * (p8.rnd(1) - 0.5);
             } else {
                 bomb.y += bomb.vy;
             }
+            bomb.y = @mod(bomb.y + 128, 128);
         }
         bomb.t += 1;
     }
@@ -394,19 +351,8 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
     }
 }
 
-fn circfill(x: f32, y: f32, r: f32, c: u16) void {
-    rl.drawCircleSector(
-        rl.Vector2{ .x = x, .y = y },
-        r,
-        0,
-        360,
-        5,
-        palette[c],
-    );
-}
-
 pub fn draw() !void {
-    rl.clearBackground(.white);
+    p8.cls();
 
     //   palt()
     //
@@ -426,13 +372,13 @@ pub fn draw() !void {
     //
 
     for (state.particles.items) |s| {
-        circfill(s.x, s.y, s.r, s.c);
+        p8.circfill(s.x, s.y, s.r, s.c);
     }
     //
     //   palt(0b0000000100000000)
     //
     for (state.blocks.items) |block| {
-        spr(block_sprite, block.x, block.y, false, false);
+        p8.spr(block_sprite, block.x, block.y, false, false);
     }
 
     for (0..2) |p| {
@@ -444,7 +390,7 @@ pub fn draw() !void {
             else
                 player_sprites[p].norm);
 
-        spr(
+        p8.spr(
             player_sprite,
             state.players[p].x,
             state.players[p].y,
@@ -472,62 +418,12 @@ pub fn draw() !void {
             bomb_anim = bomb_red_spr;
         }
 
-        spr(bomb_anim, bomb.x, bomb.y, false, false);
+        p8.spr(bomb_anim, bomb.x, bomb.y, false, false);
     }
-}
-
-fn sfx(n: u8) void {
-    const data: []const u8 = switch (n) {
-        0 => @embedFile("assets/mygame_sfx_0.wav"),
-        1 => @embedFile("assets/mygame_sfx_1.wav"),
-        2 => @embedFile("assets/mygame_sfx_2.wav"),
-        3 => @embedFile("assets/mygame_sfx_3.wav"),
-        4 => @embedFile("assets/mygame_sfx_4.wav"),
-        5 => @embedFile("assets/mygame_sfx_5.wav"),
-        6 => @embedFile("assets/mygame_sfx_6.wav"),
-        7 => @embedFile("assets/mygame_sfx_7.wav"),
-        else => unreachable,
-    };
-
-    const wave = rl.loadWaveFromMemory(".wav", data) catch unreachable;
-
-    const sound = rl.loadSoundFromWave(wave);
-
-    rl.unloadWave(wave);
-
-    rl.playSound(sound);
-}
-
-fn spr(n: u8, x: f32, y: f32, flip_x: bool, flip_y: bool) void {
-    const sprite_size = 8;
-
-    if (sheet == null) {
-        const image = rl.loadImageFromMemory(
-            ".png",
-            @embedFile("assets/spritesheet.png"),
-        ) catch unreachable;
-        sheet = rl.loadTextureFromImage(image) catch unreachable;
-    }
-
-    const source: rl.Rectangle = .{
-        .x = @as(f32, @floatFromInt(n)) * sprite_size,
-        .y = 0,
-        .width = if (flip_x) -sprite_size else sprite_size,
-        .height = if (flip_y) -sprite_size else sprite_size,
-    };
-
-    const dest = rl.Vector2{ .x = x, .y = y };
-
-    rl.drawTextureRec(
-        sheet.?,
-        source,
-        dest,
-        rl.Color.white,
-    );
 }
 
 fn explode(bomb: *Bomb) void {
-    sfx(1);
+    p8.sfx(1);
     state.shake = 10;
 
     for (&state.players) |*p| {
@@ -544,13 +440,13 @@ fn explode(bomb: *Bomb) void {
     for (1..20) |_| {
         state.particles.appendBounded(.{
             .type = 1,
-            .t = rndInt(50),
-            .x = bomb.x + rnd(10) - 5,
-            .y = bomb.y + rnd(10) - 5,
-            .vx = rnd(2) - 1,
-            .vy = rnd(2) - 1,
-            .r = rnd(5),
-            .c = rndChoose(&[_]u16{ 5, 6, 7, 13 }),
+            .t = p8.rndInt(50),
+            .x = bomb.x + p8.rnd(10) - 5,
+            .y = bomb.y + p8.rnd(10) - 5,
+            .vx = p8.rnd(2) - 1,
+            .vy = p8.rnd(2) - 1,
+            .r = p8.rnd(5),
+            .c = p8.rndChoose(&[_]u16{ 5, 6, 7, 13 }),
         }) catch unreachable;
     }
 }
