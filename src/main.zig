@@ -115,113 +115,118 @@ pub fn main() !void {
     rl.setTextureFilter(target.texture, rl.TextureFilter.point);
     rl.initAudioDevice();
 
-    // get a socket and set domain, type and protocol flags
-    const sock = try std.posix.socket(
-        std.posix.AF.INET,
-        std.posix.SOCK.DGRAM,
-        std.posix.IPPROTO.UDP,
-    );
+    const network = false;
 
-    defer std.posix.close(sock);
-
-    {
-        var flags: std.posix.O = @bitCast(@as(u32, @truncate(
-            try std.posix.fcntl(sock, std.posix.F.GETFL, 0),
-        )));
-
-        // modify
-        flags.NONBLOCK = true;
-
-        _ = try std.posix.fcntl(
-            sock,
-            std.posix.F.SETFL,
-            @intCast(@as(u32, @bitCast(flags))),
-        );
-    }
-
-    if (player == 0) {
-        std.debug.print("putting socket in broadcast mode.\n", .{});
-
-        const yes: c_int = 1;
-        try std.posix.setsockopt(
-            sock,
-            std.posix.SOL.SOCKET,
-            std.posix.SO.BROADCAST,
-            std.mem.asBytes(&yes),
-        );
-    }
-
-    try bindSocket(sock, PORT);
-
-    try game.init(player);
-
+    var sock: std.posix.socket_t = undefined;
     var from: std.posix.sockaddr.in = undefined;
+    if (network) {
 
-    if (player == 0) {
-        try broadcastDiscovery(sock);
+        // get a socket and set domain, type and protocol flags
+        sock = try std.posix.socket(
+            std.posix.AF.INET,
+            std.posix.SOCK.DGRAM,
+            std.posix.IPPROTO.UDP,
+        );
 
-        while (!rl.windowShouldClose()) {
-            if (listenForFriend(sock)) |ad| {
-                from = ad;
+        defer std.posix.close(sock);
 
+        {
+            var flags: std.posix.O = @bitCast(@as(u32, @truncate(
+                try std.posix.fcntl(sock, std.posix.F.GETFL, 0),
+            )));
+
+            // modify
+            flags.NONBLOCK = true;
+
+            _ = try std.posix.fcntl(
+                sock,
+                std.posix.F.SETFL,
+                @intCast(@as(u32, @bitCast(flags))),
+            );
+        }
+
+        if (player == 0) {
+            std.debug.print("putting socket in broadcast mode.\n", .{});
+
+            const yes: c_int = 1;
+            try std.posix.setsockopt(
+                sock,
+                std.posix.SOL.SOCKET,
+                std.posix.SO.BROADCAST,
+                std.mem.asBytes(&yes),
+            );
+        }
+
+        try bindSocket(sock, PORT);
+
+        if (player == 0) {
+            try broadcastDiscovery(sock);
+
+            while (!rl.windowShouldClose()) {
+                if (listenForFriend(sock)) |ad| {
+                    from = ad;
+
+                    break;
+                }
+                std.debug.print("still waitin...\n", .{});
+            }
+        } else {
+            var from_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
+            var buf: [512]u8 = undefined;
+            while (!rl.windowShouldClose()) {
+                std.debug.print("waiting for broadcast,,..\n", .{});
+                const n = std.posix.recvfrom(
+                    sock,
+                    &buf,
+                    0,
+                    @ptrCast(&from),
+                    &from_len,
+                ) catch |err| switch (err) {
+                    error.WouldBlock => {
+                        continue;
+                    },
+                    else => {
+                        std.debug.print("recv error: {}\n", .{err});
+                        @panic("ERROR RECV");
+                    },
+                };
+                std.debug.print("got my broadcaste: {s}\n", .{buf[0..n]});
                 break;
             }
-            std.debug.print("still waitin...\n", .{});
-        }
-    } else {
-        var from_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
-        var buf: [512]u8 = undefined;
-        while (!rl.windowShouldClose()) {
-            std.debug.print("waiting for broadcast,,..\n", .{});
-            const n = std.posix.recvfrom(
+
+            std.debug.print("... now sendin lesgo,,.. {any}\n", .{from});
+
+            _ = try std.posix.sendto(
                 sock,
-                &buf,
+                "lesgo",
                 0,
                 @ptrCast(&from),
-                &from_len,
-            ) catch |err| switch (err) {
-                error.WouldBlock => {
-                    continue;
-                },
-                else => {
-                    std.debug.print("recv error: {}\n", .{err});
-                    @panic("ERROR RECV");
-                },
-            };
-            std.debug.print("got my broadcaste: {s}\n", .{buf[0..n]});
-            break;
+                @sizeOf(std.posix.sockaddr.in),
+            );
+
+            std.debug.print("... sent!\n", .{});
         }
-
-        std.debug.print("... now sendin lesgo,,.. {any}\n", .{from});
-
-        _ = try std.posix.sendto(
-            sock,
-            "lesgo",
-            0,
-            @ptrCast(&from),
-            @sizeOf(std.posix.sockaddr.in),
-        );
-
-        std.debug.print("... sent!\n", .{});
     }
 
+    try game.init(player);
     var network_buttons = game.Buttons{};
     var user_buttons = game.Buttons{};
 
     while (!rl.windowShouldClose()) {
-        user_buttons.left_hit = rl.isKeyPressed(rl.KeyboardKey.left);
-        user_buttons.right_hit = rl.isKeyPressed(rl.KeyboardKey.right);
-        user_buttons.up_hit = rl.isKeyPressed(rl.KeyboardKey.up);
-        user_buttons.x_hit = rl.isKeyPressed(rl.KeyboardKey.x);
-        user_buttons.left_held = rl.isKeyDown(rl.KeyboardKey.left);
-        user_buttons.right_held = rl.isKeyDown(rl.KeyboardKey.right);
-        user_buttons.up_held = rl.isKeyDown(rl.KeyboardKey.up);
-        user_buttons.x_held = rl.isKeyDown(rl.KeyboardKey.x);
+        user_buttons = .{
+            .left_hit = rl.isKeyPressed(rl.KeyboardKey.left),
+            .right_hit = rl.isKeyPressed(rl.KeyboardKey.right),
+            .up_hit = rl.isKeyPressed(rl.KeyboardKey.up),
+            .x_hit = rl.isKeyPressed(rl.KeyboardKey.x),
+            .left_held = rl.isKeyDown(rl.KeyboardKey.left),
+            .right_held = rl.isKeyDown(rl.KeyboardKey.right),
+            .up_held = rl.isKeyDown(rl.KeyboardKey.up),
+            .x_held = rl.isKeyDown(rl.KeyboardKey.x),
+        };
 
-        getNetworkButtons(sock, &network_buttons);
+        if (network) {
+            getNetworkButtons(sock, &network_buttons);
 
-        {
-            // sendNetworkButtons
             _ = try std.posix.sendto(
                 sock,
                 std.mem.asBytes(&user_buttons),

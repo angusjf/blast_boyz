@@ -1,13 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
 
-const PlayerSprite = struct {
-    norm: u8,
-    jump: u8,
-    fall: u8,
-    down: u8,
-};
-
 pub const Buttons = struct {
     left_hit: bool = false,
     right_hit: bool = false,
@@ -19,7 +12,12 @@ pub const Buttons = struct {
     x_held: bool = false,
 };
 
-const player_sprites = [2]PlayerSprite{
+const player_sprites = [2]struct {
+    norm: u8,
+    jump: u8,
+    fall: u8,
+    down: u8,
+}{
     .{
         .norm = 5,
         .jump = 21,
@@ -69,6 +67,7 @@ const Player = struct {
     x: f32,
     y: f32,
     grounded: bool,
+    carry: bool,
 };
 
 var state: State = undefined;
@@ -90,9 +89,10 @@ const Particle = struct {
 
 var blocks_buf: [64]Vec2 = undefined;
 var bombs_buf: [64]Bomb = undefined;
-var particles_buf: [128]Particle = undefined;
+var particles_buf: [1024]Particle = undefined;
 
 var rand: std.Random = undefined;
+var prng: std.Random.Xoshiro256 = undefined;
 
 fn lerp(a: f32, b: f32, t: f32) f32 {
     return a * (1 - t) + b * t;
@@ -101,7 +101,7 @@ fn lerp(a: f32, b: f32, t: f32) f32 {
 var palette: [16]rl.Color = undefined;
 
 pub fn init(active: u1) !void {
-    var prng = std.Random.Xoshiro256.init(blk: {
+    prng = std.Random.Xoshiro256.init(blk: {
         var seed: u64 = undefined;
         std.posix.getrandom(std.mem.asBytes(&seed)) catch @panic("random setup failed");
         break :blk seed;
@@ -130,8 +130,24 @@ pub fn init(active: u1) !void {
 
     state = .{
         .players = [2]Player{
-            .{ .vx = 0, .vy = -1, .flip = false, .x = 8, .y = 23, .grounded = false },
-            .{ .vx = 0, .vy = -1, .flip = true, .x = 112, .y = 10, .grounded = false },
+            .{
+                .vx = 0,
+                .vy = -1,
+                .flip = false,
+                .x = 8,
+                .y = 23,
+                .grounded = false,
+                .carry = false,
+            },
+            .{
+                .vx = 0,
+                .vy = -1,
+                .flip = true,
+                .x = 112,
+                .y = 10,
+                .grounded = false,
+                .carry = false,
+            },
         },
         .ticks = 0,
         .paused = true,
@@ -139,8 +155,6 @@ pub fn init(active: u1) !void {
         .blocks = .initBuffer(&blocks_buf),
         .bombs = .initBuffer(&bombs_buf),
         .particles = .initBuffer(&particles_buf),
-        //
-        // .active = 1
         .shake = 0,
     };
 
@@ -169,8 +183,8 @@ fn mget(x: usize, y: usize) u16 {
         \\0000000000000111
         \\0000000000000000
         \\0000000000000000
-        \\1110000000000000
-        \\0000000000111100
+        \\0000000000000000
+        \\1110000000111100
         \\0000000000000000
         \\0000000000000000
         \\1111000000000000
@@ -204,56 +218,23 @@ fn control(p: *Player, buttons: Buttons) void {
     }
 
     if (buttons.x_hit) {
-        if (true) {
-            // if (p.carry) {
-            //      sfx(6)
-            //
-            //      for gem in all(gems) do
-            //        if gem.m == p.carry then
-            //          g = gem
-            //        end
-            //      end
-            //      if p.carry == "bomb" then
-            //        g = bombs[1]
-            //      end
-            //
-            //      if p.flip then
-            //        dx = -throw
-            //      else
-            //        dx = throw
-            //      end
-            //
-            //      if not btn(0)
-            //         and not btn(1) then
-            //        dx /= 10
-            //      end
-            //
-            //      g.vy += -throw + p.vy / 15
-            //      g.vx = dx + p.vx / 15
-            //
-            //      p.carry = nil
+        if (p.carry) {
+            sfx(6);
+
+            var dx: f32 = if (p.flip) -throw else throw;
+
+            if (!(buttons.left_held or buttons.right_held))
+                dx /= 10;
+
+            state.bombs.items[0].vy += -throw + p.vy / 15;
+            state.bombs.items[0].vx = dx + p.vx / 15;
+
+            p.carry = false;
         } else {
-            //       g = gem_near(p.x, p.y)
-            //       if g then
-            //         sfx(2)
-            //         if players[1].carry == g.m then
-            //           players[1].carry = nil
-            //         elseif players[2].carry == g.m then
-            //           players[2].carry = nil
-            //         end
-            //         p.carry = g.m
-            //       else
-            //         b = bomb_near(p.x, p.y)
-            //         if (b) then
-            //           sfx(2)
-            //           if players[1].carry == "bomb" then
-            //             players[1].carry = nil
-            //           elseif players[2].carry == "bomb" then
-            //             players[2].carry = nil
-            //           end
-            //           p.carry = "bomb"
-            //         end
-            //       end
+            if (bomb_near(p.x, p.y)) |_| {
+                sfx(2);
+                p.carry = true;
+            }
         }
     }
 }
@@ -266,13 +247,12 @@ fn rndInt(max: u16) u16 {
     return rand.intRangeAtMost(u16, 0, max);
 }
 
-fn rndChoose(options: []const f32) f32 {
+fn rndChoose(options: []const u16) u16 {
     return options[rand.int(usize) % options.len];
 }
 
 pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
-
-    // shake = lerp(shake, 0, 0.3)
+    state.shake = lerp(state.shake, 0, 0.3);
     //
     // if paused then
     //   if btn(0) and btn(1)
@@ -286,16 +266,7 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
     // end
     //
     state.ticks +%= 1;
-    //
-    // if ticks % 300 == 299 then
-    //   if active == 1 then
-    //     active = 2
-    //   else
-    //     active = 1
-    //   end
-    //   paused=true
-    // end
-    //
+
     if (state.ticks % 100 == 99 and state.bombs.items.len == 0)
         state.bombs.appendAssumeCapacity(.{
             .x = 10 + rnd(100),
@@ -307,16 +278,17 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
 
     for (state.bombs.items) |bomb| {
         if (state.ticks % 10 == 0) {
-            state.particles.appendAssumeCapacity(.{
+            const particle = Particle{
                 .type = 0,
-                .t = rndInt(15),
+                .t = rndInt(150),
                 .x = bomb.x + rnd(5),
                 .y = bomb.y + rnd(5) - 2,
-                .vx = rnd(1) - 1 / 2,
-                .vy = rnd(1) - 1 / 2,
+                .vx = (rnd(1) - 1) / 2,
+                .vy = (rnd(1) - 1) / 2,
                 .r = rnd(2),
-                .c = @intFromFloat(rndChoose(&[_]f32{ 5, 9, 10, 13 })),
-            });
+                .c = rndChoose(&[_]u16{ 5, 9, 10, 13 }),
+            };
+            state.particles.appendBounded(particle) catch {};
         }
     }
 
@@ -362,58 +334,58 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
         player.y = @mod(player.y + 128, 128);
     }
 
-    for (state.bombs.items) |*bomb| {
+    for (state.bombs.items, 0..) |*bomb, i| {
         if (bomb.t == bomb_life) {
             explode(bomb);
+            _ = state.bombs.swapRemove(i);
         }
 
-        //
-        //   if players[1].carry == "bomb" then
-        //     bomb.vx = 0
-        //     bomb.vy = 0
-        //     bomb.x = players[1].x
-        //     bomb.y = players[1].y - 7
-        //   elseif players[2].carry == "bomb" then
-        //     bomb.vx = 0
-        //     bomb.vy = 0
-        //     bomb.x = players[2].x
-        //     bomb.y = players[2].y - 7
-        //   else
-        bomb.vy += grav;
-        bomb.vx *= gem_fric;
-
-        if (bomb.x + bomb.vx < 0) {
-            bomb.x = 0 - bomb.vx;
-            bomb.vx *= -1;
-            state.shake = 2;
-        } else if (bomb.x + bomb.vx > 128 - 8) {
-            bomb.x = 128 - bomb.vx - 8;
-            bomb.vx *= -1;
-            state.shake = 2;
-        } else {
-            bomb.x += bomb.vx;
-        }
-
-        const d2b = dist_to_block(bomb.x, bomb.y);
-
-        if (bomb.vy > d2b) {
-            if (bomb.vy > 0.5) {
-                sfx(7);
+        for (state.players) |p| {
+            if (p.carry) {
+                bomb.vx = 0;
+                bomb.vy = 0;
+                bomb.x = p.x;
+                bomb.y = p.y - 7;
+                break;
             }
-            bomb.y += d2b;
-            bomb.vy = -bomb.vy / 4;
-            bomb.vx = bomb.vy / 2 * (rnd(1) - 0.5);
         } else {
-            bomb.y += bomb.vy;
+            bomb.vy += grav;
+            bomb.vx *= gem_fric;
+
+            if (bomb.x + bomb.vx < 0) {
+                bomb.x = 0 - bomb.vx;
+                bomb.vx *= -1;
+                state.shake = 2;
+            } else if (bomb.x + bomb.vx > 128 - 8) {
+                bomb.x = 128 - bomb.vx - 8;
+                bomb.vx *= -1;
+                state.shake = 2;
+            } else {
+                bomb.x += bomb.vx;
+            }
+
+            const d2b = dist_to_block(bomb.x, bomb.y);
+
+            if (bomb.vy > d2b) {
+                if (bomb.vy > 0.5) {
+                    sfx(7);
+                }
+                bomb.y += d2b;
+                bomb.vy = -bomb.vy / 4;
+                bomb.vx = bomb.vy / 2 * (rnd(1) - 0.5);
+            } else {
+                bomb.y += bomb.vy;
+            }
         }
-        //   end
-        //
         bomb.t += 1;
     }
 
-    for (state.particles.items) |*s| {
+    for (state.particles.items, 0..) |*s, i| {
         if (s.t <= 0) {
-            // del(sparks, s);
+            _ = state.particles.swapRemove(i);
+
+            // TODO figure out
+            break;
         } else {
             s.x += s.vx;
             s.y += s.vy;
@@ -462,8 +434,7 @@ pub fn draw() !void {
     for (state.blocks.items) |block| {
         spr(block_sprite, block.x, block.y, false, false);
     }
-    //
-    //
+
     for (0..2) |p| {
         const player_sprite = if (state.players[p].vy < 0)
             player_sprites[p].jump
@@ -481,21 +452,9 @@ pub fn draw() !void {
             false,
         );
     }
-    //
-    //   palt(0b0000100000000000)
-    //
-    //   gsp = ticks \ 3
-    //
-    //   for _,gem in ipairs(gems) do
-    //     gem_spr = gem.m
-    //     if gsp % 12 > 8 then
-    //       gem_spr += 16 * ((gsp % 12) - 8)
-    //     end
-    //     spr(gem_spr, gem.x, gem.y)
-    //   end
-    //
+
     //   palt(12)
-    //
+
     for (state.bombs.items) |bomb| {
         var mod: u16 = undefined;
         if (bomb.t > bomb_life * 0.8) {
@@ -515,29 +474,17 @@ pub fn draw() !void {
 
         spr(bomb_anim, bomb.x, bomb.y, false, false);
     }
-    //
-    //   if paused then
-    //     if active == 1 then
-    //       c = 8
-    //     else
-    //       c = 12
-    //     end
-    //     rectfill(38, 48, 96, 56, 0)
-    //     print("swap to plyr " .. active,
-    //           40, 50, c)
-    //
-    //     rectfill(38, 58, 96, 66, 0)
-    //     print("press 🅾️⬅️⬆️➡️",
-    //           40, 60, c)
-    //   end
-
 }
 
 fn sfx(n: u8) void {
     const data: []const u8 = switch (n) {
         0 => @embedFile("assets/mygame_sfx_0.wav"),
         1 => @embedFile("assets/mygame_sfx_1.wav"),
+        2 => @embedFile("assets/mygame_sfx_2.wav"),
+        3 => @embedFile("assets/mygame_sfx_3.wav"),
         4 => @embedFile("assets/mygame_sfx_4.wav"),
+        5 => @embedFile("assets/mygame_sfx_5.wav"),
+        6 => @embedFile("assets/mygame_sfx_6.wav"),
         7 => @embedFile("assets/mygame_sfx_7.wav"),
         else => unreachable,
     };
@@ -546,7 +493,7 @@ fn sfx(n: u8) void {
 
     const sound = rl.loadSoundFromWave(wave);
 
-    rl.unloadWave(wave); // IMPORTANT: sound has its own copy now
+    rl.unloadWave(wave);
 
     rl.playSound(sound);
 }
@@ -580,57 +527,46 @@ fn spr(n: u8, x: f32, y: f32, flip_x: bool, flip_y: bool) void {
 }
 
 fn explode(bomb: *Bomb) void {
-    _ = bomb; // autofix
     sfx(1);
-    //   shake = 10
-    //   del(bombs, bomb)
-    //
-    //   if players[1].carry == "bomb" then
-    //     players[1].carry = nil
-    //   end
-    //   if players[2].carry == "bomb" then
-    //     players[2].carry = nil
-    //   end
-    //
-    //   function bash(obj, force)
-    //     dx = obj.x - bomb.x
-    //     dy = obj.y - bomb.y
-    //     dist = sqrt(dx*dx + dy*dy) + 1
-    //     obj.vx += sgn(dx) * force / dist
-    //     obj.vy += sgn(dy - 1) * force / dist
-    //   end
-    //
-    //   for player in all(players) do
-    //     bash(player, 10)
-    //   end
-    //   for gem in all(gems) do
-    //     bash(gem, 20)
-    //   end
-    //
-    //   for i = 1,20 do
-    //     add(smoke, {
-    //       t = rnd(50),
-    //       x = bomb.x + rnd(10) - 5,
-    //       y = bomb.y + rnd(10) - 5,
-    //       vx = rnd(2) - 1,
-    //       vy = rnd(2) - 1,
-    //       r = rnd(5),
-    //       c = rnd({5,6,7,13})
-    //     })
-    //   end
+    state.shake = 10;
+
+    for (&state.players) |*p| {
+        p.carry = false;
+
+        const dx = p.x - bomb.x;
+        const dy = p.y - bomb.y;
+        const dist = std.math.sqrt(dx * dx + dy * dy) + 1;
+        const force = 10;
+        p.vx += std.math.sign(dx) * force / dist;
+        p.vy += std.math.sign(dy - 1) * force / dist;
+    }
+
+    for (1..20) |_| {
+        state.particles.appendBounded(.{
+            .type = 1,
+            .t = rndInt(50),
+            .x = bomb.x + rnd(10) - 5,
+            .y = bomb.y + rnd(10) - 5,
+            .vx = rnd(2) - 1,
+            .vy = rnd(2) - 1,
+            .r = rnd(5),
+            .c = rndChoose(&[_]u16{ 5, 6, 7, 13 }),
+        }) catch unreachable;
+    }
 }
 
-//
-// function bomb_near(x, y)
-//   for bomb in all(bombs) do
-//     if x > bomb.x - 8
-//       and x < bomb.x + 8
-//       and y > bomb.y - 8
-//       and y < bomb.y + 8 then
-//       return bomb
-//     end
-//   end
-// end
+fn bomb_near(x: f32, y: f32) ?Bomb {
+    for (state.bombs.items) |bomb| {
+        if (x > bomb.x - 8 and
+            x < bomb.x + 8 and
+            y > bomb.y - 8 and
+            y < bomb.y + 8)
+        {
+            return bomb;
+        }
+    }
+    return null;
+}
 
 fn dist_to_block(x: f32, y: f32) f32 {
     var d2b: f32 = 999;
