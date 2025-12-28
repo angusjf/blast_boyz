@@ -94,10 +94,11 @@ pub fn main() !void {
 
     _ = args.skip();
 
-    const player: u1 = if (args.next()) |arg| p: {
-        if (std.mem.eql(u8, arg, "p1")) break :p 0;
-        if (std.mem.eql(u8, arg, "p2")) break :p 1;
-        @panic("must be p1 or p2");
+    const player: u1, const network = if (args.next()) |arg| p: {
+        if (std.mem.eql(u8, arg, "p1")) break :p .{ 0, true };
+        if (std.mem.eql(u8, arg, "p2")) break :p .{ 1, true };
+        if (std.mem.eql(u8, arg, "offline")) break :p .{ 1, false };
+        @panic("must be p1, p2 or offline");
     } else @panic("must give arg");
 
     std.debug.print("{d}", .{player});
@@ -115,20 +116,18 @@ pub fn main() !void {
     rl.setTextureFilter(target.texture, rl.TextureFilter.point);
     rl.initAudioDevice();
 
-    const network = false;
-
     var sock: std.posix.socket_t = undefined;
-    var from: std.posix.sockaddr.in = undefined;
-    if (network) {
+    defer if (network) std.posix.close(sock);
 
+    var from: std.posix.sockaddr.in = undefined;
+
+    if (network) {
         // get a socket and set domain, type and protocol flags
         sock = try std.posix.socket(
             std.posix.AF.INET,
             std.posix.SOCK.DGRAM,
             std.posix.IPPROTO.UDP,
         );
-
-        defer std.posix.close(sock);
 
         {
             var flags: std.posix.O = @bitCast(@as(u32, @truncate(
