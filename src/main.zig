@@ -92,12 +92,22 @@ pub fn main() !void {
 
     _ = args.skip();
 
-    const player: u1, const network = if (args.next()) |arg| p: {
-        if (std.mem.eql(u8, arg, "p1")) break :p .{ 0, true };
-        if (std.mem.eql(u8, arg, "p2")) break :p .{ 1, true };
-        if (std.mem.eql(u8, arg, "offline")) break :p .{ 0, false };
-        @panic("must be p1, p2 or offline");
-    } else @panic("must give arg");
+    const player, const network = args: {
+        var p: u1 = 0;
+        var n = false;
+        while (args.next()) |arg| {
+            if (std.mem.eql(u8, arg, "p1")) {
+                p = 0;
+            } else if (std.mem.eql(u8, arg, "p2")) {
+                p = 1;
+            } else if (std.mem.eql(u8, arg, "offline")) {
+                n = false;
+            } else {
+                @panic("must be p1, p2 or offline");
+            }
+        }
+        break :args .{ p, n };
+    };
 
     std.debug.print("{d}", .{player});
 
