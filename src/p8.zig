@@ -4,6 +4,8 @@ const std = @import("std");
 var palette: [16]rl.Color = undefined;
 
 pub const P8 = struct {
+    camera: rl.Camera2D,
+
     sheet: rl.Texture2D,
     sounds: [8]rl.Sound,
 
@@ -11,6 +13,13 @@ pub const P8 = struct {
     prng: std.Random.Xoshiro256,
 
     pub fn init(self: *P8) void {
+        self.camera = rl.Camera2D{
+            .offset = rl.Vector2.zero(),
+            .rotation = 0,
+            .target = rl.Vector2.zero(),
+            .zoom = 1,
+        };
+
         palette = .{
             rl.Color.fromInt(0x000000), // black
             rl.Color.fromInt(0x1D2B53), // dark-blue

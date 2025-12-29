@@ -352,24 +352,24 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
 }
 
 pub fn draw() !void {
+    p8.camera.begin();
+    defer p8.camera.end();
+
+    if (state.shake > 0.1) {
+        p8.camera.offset.x = p8.rnd(state.shake) - state.shake / 2;
+        p8.camera.offset.y = p8.rnd(state.shake) - state.shake / 2;
+    } else {
+        p8.camera.offset.x = 0;
+        p8.camera.offset.y = 0;
+    }
+
     p8.cls();
 
     //   palt()
-    //
-    //   if shake > 0.1 then
-    //     camera(rnd(shake) - shake/2,
-    //            rnd(shake) - shake/2)
-    //   else
-    //     camera(0, 0)
-    //     camera(0, 0)
-    //   end
-    //
-    // for 0,15 do
-    //   for y=0,15 do
-    //     spr(bg_sprite, x * 8, y * 8)
-    //   end
-    // end
-    //
+
+    for (0..15) |x|
+        for (0..15) |y|
+            p8.spr(bg_sprite, @floatFromInt(x * 8), @floatFromInt(y * 8), false, false);
 
     for (state.particles.items) |s| {
         p8.circfill(s.x, s.y, s.r, s.c);
