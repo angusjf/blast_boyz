@@ -104,8 +104,8 @@ pub const P8 = struct {
         const sprite_size = 8;
 
         const source: rl.Rectangle = .{
-            .x = @as(f32, @floatFromInt(n)) * sprite_size,
-            .y = 0,
+            .x = @as(f32, @floatFromInt(n % 16)) * sprite_size,
+            .y = @as(f32, @floatFromInt(n / 16)) * sprite_size,
             .width = if (flip_x) -sprite_size else sprite_size,
             .height = if (flip_y) -sprite_size else sprite_size,
         };

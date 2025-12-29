@@ -95,7 +95,7 @@ pub fn main() !void {
     const player: u1, const network = if (args.next()) |arg| p: {
         if (std.mem.eql(u8, arg, "p1")) break :p .{ 0, true };
         if (std.mem.eql(u8, arg, "p2")) break :p .{ 1, true };
-        if (std.mem.eql(u8, arg, "offline")) break :p .{ 1, false };
+        if (std.mem.eql(u8, arg, "offline")) break :p .{ 0, false };
         @panic("must be p1, p2 or offline");
     } else @panic("must give arg");
 

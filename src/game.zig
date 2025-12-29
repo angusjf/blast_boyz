@@ -388,13 +388,14 @@ pub fn draw() !void {
     }
 
     for (0..2) |p| {
-        const player_sprite = if (state.players[p].vy < 0)
-            player_sprites[p].jump
-        else
-            (if (state.players[p].vy > 0)
-                player_sprites[p].fall
-            else
-                player_sprites[p].norm);
+        var player_sprite: u8 = undefined;
+        if (state.players[p].vy < 0) {
+            player_sprite = player_sprites[p].jump;
+        } else if (state.players[p].vy > 0) {
+            player_sprite = player_sprites[p].fall;
+        } else {
+            player_sprite = player_sprites[p].norm;
+        }
 
         p8.spr(
             player_sprite,
