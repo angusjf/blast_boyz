@@ -1,4 +1,5 @@
 const std = @import("std");
+const rl = @import("raylib");
 const P8 = @import("p8.zig").P8;
 
 pub const Buttons = struct {
@@ -266,7 +267,7 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
         player.vx *= fric;
 
         if (player.x + player.vx < 0) {
-            player.x = 0 - player.vx;
+            player.x = 0;
             player.vx *= -1;
         } else if (player.x + player.vx > 128 - 8) {
             player.x = 128 - 8;
@@ -368,9 +369,24 @@ pub fn draw() !void {
         p8.camera.offset.y = 0;
     }
 
-    p8.cls();
+    {
+        // var total_x: f32 = 0;
+        // var total_y: f32 = 0;
 
-    //   palt()
+        // for (state.players) |p| {
+        //     total_x += p.x;
+        //     total_y += p.y;
+        // }
+
+        // total_x /= state.players.len;
+        // total_y /= state.players.len;
+
+        // TODO camera follows lads
+        // p8.camera.target.x = total_x;
+        // p8.camera.target.y = total_y;
+    }
+
+    p8.cls();
 
     {
         var y: f32 = -16;
@@ -385,22 +401,23 @@ pub fn draw() !void {
     for (state.particles.items) |s| {
         p8.circfill(s.x, s.y, s.r, s.c);
     }
-    //
-    //   palt(0b0000000100000000)
-    //
+
     for (state.blocks.items) |block| {
         p8.spr(block_sprite, block.x, block.y, false, false);
     }
 
     for (0..2) |p| {
-        var player_sprite: u8 = undefined;
-        if (state.players[p].vy < 0) {
-            player_sprite = player_sprites[p].jump;
-        } else if (state.players[p].vy > 0) {
-            player_sprite = player_sprites[p].fall;
-        } else {
-            player_sprite = player_sprites[p].norm;
-        }
+        const player_sprite: u8 = spr: {
+            if (state.players[p].vy < 0) {
+                break :spr player_sprites[p].jump;
+            } else if (state.players[p].vy > 0) {
+                break :spr player_sprites[p].fall;
+            } else if (state.players[p].carry) {
+                break :spr player_sprites[p].down;
+            } else {
+                break :spr player_sprites[p].norm;
+            }
+        };
 
         p8.spr(
             player_sprite,
@@ -410,8 +427,6 @@ pub fn draw() !void {
             false,
         );
     }
-
-    //   palt(12)
 
     for (state.bombs.items) |bomb| {
         var mod: u16 = undefined;

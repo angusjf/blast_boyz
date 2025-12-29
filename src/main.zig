@@ -79,7 +79,6 @@ fn listenForFriend(fd: std.posix.fd_t) ?std.posix.sockaddr.in {
             @panic("ERROR RECV");
         },
     };
-    std.debug.print("{any}\n", .{buf[0..n]});
 
     return if (std.mem.eql(u8, buf[0..n], "lesgo"))
         from
