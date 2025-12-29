@@ -82,7 +82,7 @@ const Particle = struct {
     vx: f32,
     vy: f32,
     r: f32,
-    c: u16,
+    c: P8.Palette,
 };
 
 var blocks_buf: [64]Vec2 = undefined;
@@ -241,8 +241,13 @@ pub fn update(user_buttons: Buttons, network_buttons: Buttons) !void {
                 .y = bomb.y + p8.rnd(5) - 2,
                 .vx = (p8.rnd(1) - 1) / 2,
                 .vy = (p8.rnd(1) - 1) / 2,
-                .r = p8.rnd(2),
-                .c = p8.rndChoose(&[_]u16{ 5, 9, 10, 13 }),
+                .r = p8.rnd(2) + 1,
+                .c = p8.rndChoose(P8.Palette, &[_]P8.Palette{
+                    P8.Palette.dark_grey,
+                    P8.Palette.orange,
+                    P8.Palette.black,
+                    P8.Palette.lavender,
+                }),
             };
             state.particles.appendBounded(particle) catch {};
         }
@@ -453,7 +458,12 @@ fn explode(bomb: *Bomb) void {
             .vx = p8.rnd(2) - 1,
             .vy = p8.rnd(2) - 1,
             .r = p8.rnd(5),
-            .c = p8.rndChoose(&[_]u16{ 5, 6, 7, 13 }),
+            .c = p8.rndChoose(P8.Palette, &[_]P8.Palette{
+                P8.Palette.dark_grey,
+                P8.Palette.light_grey,
+                P8.Palette.white,
+                P8.Palette.lavender,
+            }),
         }) catch unreachable;
     }
 }

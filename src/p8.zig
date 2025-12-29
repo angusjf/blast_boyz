@@ -1,8 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
 
-var palette: [16]rl.Color = undefined;
-
 pub const P8 = struct {
     camera: rl.Camera2D,
 
@@ -12,31 +10,54 @@ pub const P8 = struct {
     rand: std.Random,
     prng: std.Random.Xoshiro256,
 
+    pub const Palette = enum(u4) {
+        black = 0,
+        dark_blue = 1,
+        dark_purple = 2,
+        dark_green = 3,
+        brown = 4,
+        dark_grey = 5,
+        light_grey = 6,
+        white = 7,
+        red = 8,
+        orange = 9,
+        yellow = 10,
+        green = 11,
+        blue = 12,
+        lavender = 13,
+        pink = 14,
+        light_peach = 15,
+
+        pub const palette: [16]rl.Color = .{
+            .{ .r = 0, .g = 0, .b = 0, .a = 255 },
+            .{ .r = 29, .g = 43, .b = 83, .a = 255 },
+            .{ .r = 126, .g = 37, .b = 83, .a = 255 },
+            .{ .r = 0, .g = 135, .b = 81, .a = 255 },
+            .{ .r = 171, .g = 82, .b = 54, .a = 255 },
+            .{ .r = 95, .g = 87, .b = 79, .a = 255 },
+            .{ .r = 194, .g = 195, .b = 199, .a = 255 },
+            .{ .r = 255, .g = 241, .b = 232, .a = 255 },
+            .{ .r = 255, .g = 0, .b = 77, .a = 255 },
+            .{ .r = 255, .g = 163, .b = 0, .a = 255 },
+            .{ .r = 255, .g = 236, .b = 39, .a = 255 },
+            .{ .r = 0, .g = 228, .b = 54, .a = 255 },
+            .{ .r = 41, .g = 173, .b = 255, .a = 255 },
+            .{ .r = 131, .g = 118, .b = 156, .a = 255 },
+            .{ .r = 255, .g = 119, .b = 168, .a = 255 },
+            .{ .r = 255, .g = 204, .b = 170, .a = 255 },
+        };
+
+        pub fn toColor(self: Palette) rl.Color {
+            return palette[@intFromEnum(self)];
+        }
+    };
+
     pub fn init(self: *P8) void {
         self.camera = rl.Camera2D{
             .offset = rl.Vector2.zero(),
             .rotation = 0,
             .target = rl.Vector2.zero(),
             .zoom = 1,
-        };
-
-        palette = .{
-            rl.Color.fromInt(0x000000), // black
-            rl.Color.fromInt(0x1D2B53), // dark-blue
-            rl.Color.fromInt(0x7E2553), // dark-purple
-            rl.Color.fromInt(0x008751), // dark-green
-            rl.Color.fromInt(0xAB5236), // brown
-            rl.Color.fromInt(0x5F574F), // dark-grey
-            rl.Color.fromInt(0xC2C3C7), // light-grey
-            rl.Color.fromInt(0xFFF1E8), // white
-            rl.Color.fromInt(0xFF004D), // red
-            rl.Color.fromInt(0xFFA300), // orange
-            rl.Color.fromInt(0xFFEC27), // yellow
-            rl.Color.fromInt(0x00E436), // green
-            rl.Color.fromInt(0x29ADFF), // blue
-            rl.Color.fromInt(0x83769C), // lavender
-            rl.Color.fromInt(0xFF77A8), // pink
-            rl.Color.fromInt(0xFFCCAA), // light-peach
         };
 
         var seed: u64 = 0;
@@ -81,18 +102,18 @@ pub const P8 = struct {
         return self.rand.intRangeAtMost(u16, 0, max);
     }
 
-    pub fn rndChoose(self: *const P8, options: []const u16) u16 {
+    pub fn rndChoose(self: *const P8, comptime T: type, options: []const T) T {
         return options[self.rand.int(usize) % options.len];
     }
 
-    pub fn circfill(_: *const P8, x: f32, y: f32, r: f32, c: u16) void {
+    pub fn circfill(_: *const P8, x: f32, y: f32, r: f32, c: P8.Palette) void {
         rl.drawCircleSector(
             rl.Vector2{ .x = x, .y = y },
             r,
             0,
             360,
             5,
-            palette[c],
+            c.toColor(),
         );
     }
 
