@@ -59,8 +59,6 @@ fn getNetworkButtons(fd: std.posix.fd_t, network_keys: *game.Buttons) void {
             return;
         },
     };
-
-    std.debug.print("{any}\n", .{network_keys});
 }
 
 fn listenForFriend(fd: std.posix.fd_t) ?std.posix.sockaddr.in {
@@ -159,20 +157,26 @@ pub fn main() !void {
         try bindSocket(sock, PORT);
 
         if (player == 0) {
-            try broadcastDiscovery(sock);
+            var last_broadcast: i64 = 0;
+            while (true) {
+                const now = std.time.milliTimestamp();
+                if (now - last_broadcast > 1000) {
+                    std.debug.print("broadcasting\n", .{});
+                    try broadcastDiscovery(sock);
+                    last_broadcast = now;
+                }
 
-            while (!rl.windowShouldClose()) {
                 if (listenForFriend(sock)) |ad| {
                     from = ad;
+                    std.debug.print("found!\n", .{});
 
                     break;
                 }
-                std.debug.print("still waitin...\n", .{});
             }
         } else {
             var from_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
             var buf: [512]u8 = undefined;
-            while (!rl.windowShouldClose()) {
+            while (true) {
                 std.debug.print("waiting for broadcast,,..\n", .{});
                 const n = std.posix.recvfrom(
                     sock,

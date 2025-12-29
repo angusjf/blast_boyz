@@ -367,9 +367,15 @@ pub fn draw() !void {
 
     //   palt()
 
-    for (0..15) |x|
-        for (0..15) |y|
-            p8.spr(bg_sprite, @floatFromInt(x * 8), @floatFromInt(y * 8), false, false);
+    {
+        var y: f32 = -16;
+        while (y < 144) : (y += 8) {
+            var x: f32 = -16;
+            while (x < 144) : (x += 8) {
+                p8.spr(bg_sprite, x, y, false, false);
+            }
+        }
+    }
 
     for (state.particles.items) |s| {
         p8.circfill(s.x, s.y, s.r, s.c);

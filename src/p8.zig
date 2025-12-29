@@ -39,7 +39,7 @@ pub const P8 = struct {
             rl.Color.fromInt(0xFFCCAA), // light-peach
         };
 
-        var seed: u64 = undefined;
+        var seed: u64 = 0;
         std.posix.getrandom(std.mem.asBytes(&seed)) catch @panic("random setup failed");
 
         self.prng = std.Random.Xoshiro256.init(seed);
