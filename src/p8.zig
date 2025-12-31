@@ -52,7 +52,7 @@ pub const P8 = struct {
         }
     };
 
-    pub fn init(self: *P8) void {
+    pub fn init(self: *P8) !void {
         self.camera = rl.Camera2D{
             .offset = rl.Vector2.zero(),
             .rotation = 0,
@@ -60,19 +60,17 @@ pub const P8 = struct {
             .zoom = 1,
         };
 
-        var seed: u64 = 0;
-        std.posix.getrandom(std.mem.asBytes(&seed)) catch @panic("random setup failed");
-
+        const seed: u64 = 1;
         self.prng = std.Random.Xoshiro256.init(seed);
 
         self.rand = self.prng.random();
 
-        const image = rl.loadImageFromMemory(
+        const image = try rl.loadImageFromMemory(
             ".png",
             @embedFile("assets/spritesheet.png"),
-        ) catch unreachable;
+        );
 
-        self.sheet = rl.loadTextureFromImage(image) catch unreachable;
+        self.sheet = try rl.loadTextureFromImage(image);
 
         for (0..8) |i| {
             const wav = switch (i) {
@@ -87,7 +85,7 @@ pub const P8 = struct {
                 else => unreachable,
             };
 
-            const wave = rl.loadWaveFromMemory(".wav", wav) catch unreachable;
+            const wave = try rl.loadWaveFromMemory(".wav", wav);
             defer rl.unloadWave(wave);
 
             self.sounds[i] = rl.loadSoundFromWave(wave);

@@ -93,7 +93,7 @@ pub fn main() !void {
 
     const player, const network = args: {
         var p: u1 = 0;
-        var n = false;
+        var n = true;
         while (args.next()) |arg| {
             if (std.mem.eql(u8, arg, "p1")) {
                 p = 0;
@@ -110,7 +110,7 @@ pub fn main() !void {
 
     std.debug.print("{d}", .{player});
 
-    const scale = 4;
+    const scale = 5;
     const width = 128;
     const height = 128;
 
@@ -281,4 +281,8 @@ pub fn main() !void {
             rl.Color.white,
         );
     }
+}
+
+test {
+    _ = @import("p8.zig");
 }

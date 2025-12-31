@@ -97,7 +97,7 @@ fn lerp(a: f32, b: f32, t: f32) f32 {
 var p8: P8 = undefined;
 
 pub fn init(active: u1) !void {
-    p8.init();
+    try p8.init();
 
     state = .{
         .players = [2]Player{
